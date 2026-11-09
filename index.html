@@ -77,6 +77,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,.shot:focus-within
     <h2>Gotowe do Excela</h2>
     <button class="btn" id="copy">Kopiuj wiersze (do wklejenia w Excelu)</button>
     <button class="btn" id="send">Wyślij plik na komputer</button>
+    <button class="btn" id="dl">Pobierz plik na telefon (CSV)</button>
     <p class="msg" id="emsg">Kolejność kolumn zmienisz w ustawieniach.</p>
   </section>
 
@@ -91,8 +92,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,.shot:focus-within
     <h2>Ustawienia</h2>
     <label>Kolumny w Excelu (od lewej)</label>
     <select class="col"></select><select class="col" style="margin-top:8px"></select><select class="col" style="margin-top:8px"></select>
-    <label for="key">Klucz Groq API</label>
-    <input id="key" type="password" placeholder="gsk_..." autocomplete="off">
     <button class="btn" id="saveset">Zapisz ustawienia</button>
   </section>
 </main>
@@ -100,10 +99,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,.shot:focus-within
 const $=s=>document.querySelector(s);
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 const NAMES={inw:'Numer inwentarzowy',autor:'Autor',tytul:'Tytuł'};
+// Adres Workera (Cloudflare). Wklej tu swój po wdrożeniu Workera.
+const WORKER_URL='https://biblioteka-odczyt.slicznykotuni.workers.dev';
 let books=LS.get('books',[]), cols=LS.get('cols',['inw','autor','tytul']), imgs=[null,null];
-
-// Klucz można wpisać raz przez link: adres_strony#key=gsk_...
-if(location.hash.startsWith('#key=')){LS.set('key',decodeURIComponent(location.hash.slice(5)));history.replaceState(null,'',location.pathname+location.search)}
 
 function say(t,bad){const e=$('#status');e.textContent=t;e.className='msg'+(bad?' bad':'')}
 function shrink(file){return new Promise((ok,no)=>{const u=URL.createObjectURL(file),i=new Image();i.onload=()=>{const m=1280,k=Math.min(1,m/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=Math.round(i.width*k);c.height=Math.round(i.height*k);c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',.82))};i.onerror=()=>no(new Error('Nie można otworzyć zdjęcia'));i.src=u})}
@@ -122,25 +120,14 @@ let gallery=false;
 $('#gal').onclick=()=>{gallery=!gallery;[0,1].forEach(n=>{const i=$('#f'+n);if(gallery)i.removeAttribute('capture');else i.setAttribute('capture','environment')});$('#gal').textContent=gallery?'Wróć do aparatu':'Wybierz z galerii zamiast aparatu'};
 
 async function analyze(){
-  const key=LS.get('key','');
-  if(!key){say('Brak klucza Groq. Wpisz go w ustawieniach (⚙).',true);return}
+  if(WORKER_URL.includes('TWOJ')){say('Aplikacja nie jest jeszcze skonfigurowana (brak adresu Workera).',true);return}
   $('#status').innerHTML='<span class="spin"></span>Odczytuję dane ze zdjęć…';
-  const prompt='Na zdjęciu 1 jest strona tytułowa lub okładka książki, na zdjęciu 2 numer inwentarzowy (pieczątka, naklejka lub odręczny wpis). Zwróć TYLKO obiekt JSON: {"tytul":"...","autor":"...","inw":"..."}. Przepisz tekst dokładnie tak, jak jest wydrukowany, z polskimi znakami. Jeśli czegoś nie widać lub nie da się odczytać, wpisz null. Nie zgaduj.';
   try{
-    const tries=[{model:'qwen/qwen3.8-27b',reasoning_effort:'none'},{model:'qwen/qwen3.6-27b'}];
-    let r,lastErr='';
-    for(const t of tries){
-      r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({...t,temperature:0.1,max_tokens:2000,response_format:{type:'json_object'},messages:[{role:'user',content:[{type:'text',text:prompt},{type:'image_url',image_url:{url:imgs[0]}},{type:'image_url',image_url:{url:imgs[1]}}]}]})});
-      if(r.ok)break;
-      const e=await r.json().catch(()=>({}));lastErr=(e.error&&e.error.message)||('Błąd serwera ('+r.status+')');
-      if(r.status===401)throw new Error('Klucz Groq jest nieprawidłowy.');
-      if(r.status===429)throw new Error('Limit zapytań Groq wyczerpany. Spróbuj za chwilę.');
-    }
-    if(!r.ok)throw new Error(lastErr);
-    const d=await r.json(),txt=(d.choices&&d.choices[0]&&d.choices[0].message.content)||'';
-    const m=txt.match(/\{[\s\S]*\}/);let p={};try{p=JSON.parse(m?m[0]:txt)}catch{}
-    show(p);
-  }catch(e){say(e.message+' Możesz wpisać dane ręcznie.',true);show({})}
+    const r=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({images:imgs})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||('Błąd serwera ('+r.status+').'));
+    show(d);
+  }catch(e){say((e instanceof TypeError?'Brak połączenia z internetem.':e.message)+' Możesz wpisać dane ręcznie.',true);show({})}
 }
 
 function show(p){
@@ -183,22 +170,28 @@ $('#copy').onclick=async()=>{
   try{await navigator.clipboard.writeText(tsv);emsg('Skopiowano '+books.length+' wierszy. Wklej w Excelu (Ctrl+V).')}
   catch{emsg('Kopiowanie nie zadziałało. Użyj „Wyślij plik na komputer”.')}
 };
-$('#send').onclick=async()=>{
+function mkFile(){
   const esc=v=>'"'+v.replace(/"/g,'""')+'"';
   const csv='\ufeff'+rows().map(r=>r.map(esc).join(';')).join('\r\n');
-  const name='ksiazki-'+new Date().toISOString().slice(0,10)+'.csv',file=new File([csv],name,{type:'text/csv'});
+  const name='ksiazki-'+new Date().toISOString().slice(0,10)+'.csv';
+  return new File([csv],name,{type:'text/csv'});
+}
+$('#send').onclick=async()=>{
+  const file=mkFile();
   if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:'Księgozbiór'});emsg('Plik wysłany.');return}catch(e){if(e.name==='AbortError')return}}
-  const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;a.click();emsg('Plik pobrany: '+name);
+  download(file);
 };
+$('#dl').onclick=()=>download(mkFile());
+function download(file){const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name;document.body.append(a);a.click();a.remove();emsg('Plik pobrany: '+file.name+' (folder Pobrane w telefonie).')}
 $('#clear').onclick=()=>{if(confirm('Na pewno wyczyścić listę? Zrób to dopiero, gdy dane są już w Excelu.')){books=[];LS.set('books',books);render()}};
 
 // Ustawienia
 document.querySelectorAll('.col').forEach((s,i)=>{Object.keys(NAMES).forEach(k=>s.add(new Option(NAMES[k],k)));s.value=cols[i]});
-$('#gear').onclick=()=>{$('#settings').classList.toggle('hide');$('#key').value=LS.get('key','');$('#settings').scrollIntoView({behavior:'smooth'})};
+$('#gear').onclick=()=>{$('#settings').classList.toggle('hide');$('#settings').scrollIntoView({behavior:'smooth'})};
 $('#saveset').onclick=()=>{
   const c=[...document.querySelectorAll('.col')].map(s=>s.value);
   if(new Set(c).size<3){alert('Każda kolumna musi być inna.');return}
-  cols=c;LS.set('cols',cols);LS.set('key',$('#key').value.trim());$('#settings').classList.add('hide');emsg('Ustawienia zapisane.');
+  cols=c;LS.set('cols',cols);$('#settings').classList.add('hide');emsg('Ustawienia zapisane.');
 };
 render();
 </script>
