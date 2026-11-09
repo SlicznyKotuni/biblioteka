@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1f4b43">
+<title>Księgozbiór</title>
+<style>
+:root{--bg:#f4f6f4;--card:#fff;--ink:#17231f;--mute:#5d6b66;--line:#d5ddd9;--brand:#1f4b43;--act:#b9811f;--actink:#fff;--bad:#a63a2b;--ok:#2d7a52;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#121916;--card:#1b2420;--ink:#e8efec;--mute:#9baba5;--line:#2c3a35;--brand:#2b6a5e;--act:#d19a3a;--actink:#16110a;--bad:#e0705f;--ok:#5cc089;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font:17px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:env(safe-area-inset-bottom,0)}
+header{background:var(--brand);color:#fff;padding:calc(12px + env(safe-area-inset-top,0)) 16px 12px;display:flex;align-items:center;gap:12px}
+header h1{font-size:1.15rem;margin:0;flex:1}
+header .cnt{font-size:.95rem;opacity:.9}
+header button{background:none;border:0;color:#fff;font-size:1.4rem;padding:4px 8px}
+main{max-width:560px;margin:0 auto;padding:16px}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+h2{font-size:1.05rem;margin:0 0 10px}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:16px;font:inherit;font-weight:600;background:var(--brand);color:#fff;margin-top:10px}
+.btn.act{background:var(--act);color:var(--actink)}
+.btn.ghost{background:none;color:var(--ink);border:1px solid var(--line)}
+.btn:disabled{opacity:.45}
+.shots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.shot{aspect-ratio:3/4;border:2px dashed var(--line);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:8px;color:var(--mute);font-size:.9rem;background-size:cover;background-position:center;position:relative;cursor:pointer}
+.shot b{display:block;color:var(--ink);margin-bottom:4px}
+.shot.has{border-style:solid;border-color:var(--ok);color:transparent}
+.shot.has b{display:none}
+label{display:block;font-weight:600;margin:12px 0 4px;font-size:.95rem}
+input,select{width:100%;font:inherit;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+input.warn{border-color:var(--bad);box-shadow:0 0 0 2px color-mix(in srgb,var(--bad) 25%,transparent)}
+.msg{margin:10px 0 0;font-size:.95rem;color:var(--mute)}
+.msg.bad{color:var(--bad)}
+.hide{display:none!important}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+li:first-child{border-top:0}
+li div{flex:1;min-width:0}
+li small{display:block;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+li button{background:none;border:0;color:var(--bad);font-size:1.2rem;padding:8px}
+.spin{display:inline-block;width:1em;height:1em;border:3px solid var(--line);border-top-color:var(--act);border-radius:50%;vertical-align:-2px;margin-right:6px;animation:r 1s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:3s}}
+button:focus-visible,input:focus-visible,select:focus-visible,.shot:focus-visible{outline:3px solid var(--act);outline-offset:2px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Księgozbiór</h1>
+  <span class="cnt" id="cnt"></span>
+  <button id="gear" aria-label="Ustawienia">⚙</button>
+</header>
+<main>
+  <section id="capture">
+    <h2>Nowa książka</h2>
+    <div class="shots">
+      <div class="shot" id="s0" tabindex="0" role="button"><span><b>Zdjęcie 1</b>Strona tytułowa</span></div>
+      <div class="shot" id="s1" tabindex="0" role="button"><span><b>Zdjęcie 2</b>Numer inwentarzowy</span></div>
+    </div>
+    <input type="file" id="f0" accept="image/*" capture="environment" class="hide">
+    <input type="file" id="f1" accept="image/*" capture="environment" class="hide">
+    <p class="msg" id="status">Zrób oba zdjęcia. Odczyt ruszy sam.</p>
+  </section>
+
+  <section id="review" class="hide">
+    <h2>Sprawdź i popraw</h2>
+    <label for="inw">Numer inwentarzowy</label><input id="inw" inputmode="text" autocomplete="off">
+    <label for="autor">Autor</label><input id="autor" autocomplete="off">
+    <label for="tytul">Tytuł</label><input id="tytul" autocomplete="off">
+    <p class="msg" id="rmsg"></p>
+    <button class="btn act" id="save">Zapisz i następna książka</button>
+    <button class="btn ghost" id="cancel">Odrzuć i zrób zdjęcia od nowa</button>
+  </section>
+
+  <section id="export">
+    <h2>Gotowe do Excela</h2>
+    <button class="btn" id="copy">Kopiuj wiersze (do wklejenia w Excelu)</button>
+    <button class="btn" id="send">Wyślij plik na komputer</button>
+    <p class="msg" id="emsg">Kolejność kolumn zmienisz w ustawieniach.</p>
+  </section>
+
+  <section>
+    <h2>Zapisane książki</h2>
+    <ul id="list"></ul>
+    <p class="msg" id="empty">Na razie nic nie zapisano.</p>
+    <button class="btn ghost hide" id="clear">Wyczyść listę po przeniesieniu do Excela</button>
+  </section>
+
+  <section id="settings" class="hide">
+    <h2>Ustawienia</h2>
+    <label>Kolumny w Excelu (od lewej)</label>
+    <select class="col"></select><select class="col" style="margin-top:8px"></select><select class="col" style="margin-top:8px"></select>
+    <label for="key">Klucz Groq API</label>
+    <input id="key" type="password" placeholder="gsk_..." autocomplete="off">
+    <button class="btn" id="saveset">Zapisz ustawienia</button>
+  </section>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+const NAMES={inw:'Numer inwentarzowy',autor:'Autor',tytul:'Tytuł'};
+let books=LS.get('books',[]), cols=LS.get('cols',['inw','autor','tytul']), imgs=[null,null];
+
+// Klucz można wpisać raz przez link: adres_strony#key=gsk_...
+if(location.hash.startsWith('#key=')){LS.set('key',decodeURIComponent(location.hash.slice(5)));history.replaceState(null,'',location.pathname+location.search)}
+
+function say(t,bad){const e=$('#status');e.textContent=t;e.className='msg'+(bad?' bad':'')}
+function shrink(file){return new Promise((ok,no)=>{const u=URL.createObjectURL(file),i=new Image();i.onload=()=>{const m=1280,k=Math.min(1,m/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=Math.round(i.width*k);c.height=Math.round(i.height*k);c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',.82))};i.onerror=()=>no(new Error('Nie można otworzyć zdjęcia'));i.src=u})}
+
+[0,1].forEach(n=>{
+  const box=$('#s'+n),inp=$('#f'+n);
+  box.onclick=()=>inp.click();
+  box.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inp.click()}};
+  inp.onchange=async()=>{
+    const f=inp.files[0];inp.value='';if(!f)return;
+    try{imgs[n]=await shrink(f)}catch(e){say(e.message,true);return}
+    box.style.backgroundImage=`url(${imgs[n]})`;box.classList.add('has');
+    if(imgs[0]&&imgs[1])analyze();else say(n===0?'Teraz zdjęcie numeru inwentarzowego.':'Teraz zdjęcie strony tytułowej.');
+  };
+});
+
+async function analyze(){
+  const key=LS.get('key','');
+  if(!key){say('Brak klucza Groq. Wpisz go w ustawieniach (⚙).',true);return}
+  $('#status').innerHTML='<span class="spin"></span>Odczytuję dane ze zdjęć…';
+  const prompt='Na zdjęciu 1 jest strona tytułowa lub okładka książki, na zdjęciu 2 numer inwentarzowy (pieczątka, naklejka lub odręczny wpis). Zwróć TYLKO obiekt JSON: {"tytul":"...","autor":"...","inw":"..."}. Przepisz tekst dokładnie tak, jak jest wydrukowany, z polskimi znakami. Jeśli czegoś nie widać lub nie da się odczytać, wpisz null. Nie zgaduj.';
+  try{
+    const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({model:'meta-llama/llama-4-scout-17b-16e-instruct',temperature:0.1,max_tokens:400,response_format:{type:'json_object'},messages:[{role:'user',content:[{type:'text',text:prompt},{type:'image_url',image_url:{url:imgs[0]}},{type:'image_url',image_url:{url:imgs[1]}}]}]})});
+    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(r.status===401?'Klucz Groq jest nieprawidłowy.':(e.error&&e.error.message)||'Błąd serwera ('+r.status+')')}
+    const d=await r.json(),txt=(d.choices&&d.choices[0]&&d.choices[0].message.content)||'';
+    const m=txt.match(/\{[\s\S]*\}/);let p={};try{p=JSON.parse(m?m[0]:txt)}catch{}
+    show(p);
+  }catch(e){say(e.message+' Możesz wpisać dane ręcznie.',true);show({})}
+}
+
+function show(p){
+  $('#inw').value=p.inw||'';$('#autor').value=p.autor||'';$('#tytul').value=p.tytul||'';
+  ['inw','autor','tytul'].forEach(k=>$('#'+k).classList.toggle('warn',!$('#'+k).value.trim()));
+  $('#rmsg').textContent='';$('#rmsg').className='msg';
+  $('#review').classList.remove('hide');$('#review').scrollIntoView({behavior:'smooth'});
+}
+['inw','autor','tytul'].forEach(k=>$('#'+k).oninput=e=>e.target.classList.toggle('warn',!e.target.value.trim()));
+
+function reset(){imgs=[null,null];[0,1].forEach(n=>{const b=$('#s'+n);b.style.backgroundImage='';b.classList.remove('has')});$('#review').classList.add('hide');say('Zrób oba zdjęcia. Odczyt ruszy sam.');scrollTo({top:0,behavior:'smooth'})}
+$('#cancel').onclick=reset;
+
+$('#save').onclick=()=>{
+  const b={inw:$('#inw').value.trim(),autor:$('#autor').value.trim(),tytul:$('#tytul').value.trim()};
+  const bad=(t)=>{$('#rmsg').textContent=t;$('#rmsg').className='msg bad'};
+  if(!b.tytul&&!b.inw){bad('Uzupełnij przynajmniej tytuł lub numer inwentarzowy.');return}
+  if(b.inw&&books.some(x=>x.inw===b.inw)&&!confirm('Numer '+b.inw+' jest już na liście. Zapisać mimo to?'))return;
+  books.push(b);LS.set('books',books);render();reset();
+};
+
+function rows(){return books.map(b=>cols.map(c=>b[c]||''))}
+function render(){
+  $('#cnt').textContent=books.length?books.length+' zapisanych':'';
+  const ul=$('#list');ul.textContent='';
+  books.slice().reverse().forEach((b,i)=>{
+    const idx=books.length-1-i,li=document.createElement('li'),d=document.createElement('div'),t=document.createElement('b'),s=document.createElement('small'),x=document.createElement('button');
+    t.textContent=b.tytul||'(bez tytułu)';s.textContent=[b.inw,b.autor].filter(Boolean).join(' – ');
+    x.textContent='✕';x.setAttribute('aria-label','Usuń');x.onclick=()=>{if(confirm('Usunąć tę książkę z listy?')){books.splice(idx,1);LS.set('books',books);render()}};
+    d.append(t,s);li.append(d,x);ul.append(li);
+  });
+  $('#empty').classList.toggle('hide',books.length>0);
+  $('#clear').classList.toggle('hide',!books.length);
+  $('#export').classList.toggle('hide',!books.length);
+}
+
+function emsg(t){$('#emsg').textContent=t}
+$('#copy').onclick=async()=>{
+  const tsv=rows().map(r=>r.map(v=>v.replace(/[\t\r\n]+/g,' ')).join('\t')).join('\n');
+  try{await navigator.clipboard.writeText(tsv);emsg('Skopiowano '+books.length+' wierszy. Wklej w Excelu (Ctrl+V).')}
+  catch{emsg('Kopiowanie nie zadziałało. Użyj „Wyślij plik na komputer”.')}
+};
+$('#send').onclick=async()=>{
+  const esc=v=>'"'+v.replace(/"/g,'""')+'"';
+  const csv='\ufeff'+rows().map(r=>r.map(esc).join(';')).join('\r\n');
+  const name='ksiazki-'+new Date().toISOString().slice(0,10)+'.csv',file=new File([csv],name,{type:'text/csv'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:'Księgozbiór'});emsg('Plik wysłany.');return}catch(e){if(e.name==='AbortError')return}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;a.click();emsg('Plik pobrany: '+name);
+};
+$('#clear').onclick=()=>{if(confirm('Na pewno wyczyścić listę? Zrób to dopiero, gdy dane są już w Excelu.')){books=[];LS.set('books',books);render()}};
+
+// Ustawienia
+document.querySelectorAll('.col').forEach((s,i)=>{Object.keys(NAMES).forEach(k=>s.add(new Option(NAMES[k],k)));s.value=cols[i]});
+$('#gear').onclick=()=>{$('#settings').classList.toggle('hide');$('#key').value=LS.get('key','');$('#settings').scrollIntoView({behavior:'smooth'})};
+$('#saveset').onclick=()=>{
+  const c=[...document.querySelectorAll('.col')].map(s=>s.value);
+  if(new Set(c).size<3){alert('Każda kolumna musi być inna.');return}
+  cols=c;LS.set('cols',cols);LS.set('key',$('#key').value.trim());$('#settings').classList.add('hide');emsg('Ustawienia zapisane.');
+};
+render();
+</script>
+</body>
+</html>
