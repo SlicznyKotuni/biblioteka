@@ -24,6 +24,7 @@ h2{font-size:1.05rem;margin:0 0 10px}
 .btn:disabled{opacity:.45}
 .shots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .shot{aspect-ratio:3/4;border:2px dashed var(--line);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:8px;color:var(--mute);font-size:.9rem;background-size:cover;background-position:center;position:relative;cursor:pointer}
+.shot input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0;border:0;padding:0;margin:0}
 .shot b{display:block;color:var(--ink);margin-bottom:4px}
 .shot.has{border-style:solid;border-color:var(--ok);color:transparent}
 .shot.has b{display:none}
@@ -42,7 +43,7 @@ li button{background:none;border:0;color:var(--bad);font-size:1.2rem;padding:8px
 .spin{display:inline-block;width:1em;height:1em;border:3px solid var(--line);border-top-color:var(--act);border-radius:50%;vertical-align:-2px;margin-right:6px;animation:r 1s linear infinite}
 @keyframes r{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation-duration:3s}}
-button:focus-visible,input:focus-visible,select:focus-visible,.shot:focus-visible{outline:3px solid var(--act);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,.shot:focus-within{outline:3px solid var(--act);outline-offset:2px}
 </style>
 </head>
 <body>
@@ -55,11 +56,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,.shot:focus-visibl
   <section id="capture">
     <h2>Nowa książka</h2>
     <div class="shots">
-      <div class="shot" id="s0" tabindex="0" role="button"><span><b>Zdjęcie 1</b>Strona tytułowa</span></div>
-      <div class="shot" id="s1" tabindex="0" role="button"><span><b>Zdjęcie 2</b>Numer inwentarzowy</span></div>
+      <div class="shot" id="s0"><span><b>Zdjęcie 1</b>Strona tytułowa</span><input type="file" id="f0" accept="image/*" capture="environment" aria-label="Zdjęcie 1: strona tytułowa"></div>
+      <div class="shot" id="s1"><span><b>Zdjęcie 2</b>Numer inwentarzowy</span><input type="file" id="f1" accept="image/*" capture="environment" aria-label="Zdjęcie 2: numer inwentarzowy"></div>
     </div>
-    <input type="file" id="f0" accept="image/*" capture="environment" class="hide">
-    <input type="file" id="f1" accept="image/*" capture="environment" class="hide">
+    <button class="btn ghost" id="gal" type="button">Wybierz z galerii zamiast aparatu</button>
     <p class="msg" id="status">Zrób oba zdjęcia. Odczyt ruszy sam.</p>
   </section>
 
@@ -110,8 +110,6 @@ function shrink(file){return new Promise((ok,no)=>{const u=URL.createObjectURL(f
 
 [0,1].forEach(n=>{
   const box=$('#s'+n),inp=$('#f'+n);
-  box.onclick=()=>inp.click();
-  box.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inp.click()}};
   inp.onchange=async()=>{
     const f=inp.files[0];inp.value='';if(!f)return;
     try{imgs[n]=await shrink(f)}catch(e){say(e.message,true);return}
@@ -120,14 +118,25 @@ function shrink(file){return new Promise((ok,no)=>{const u=URL.createObjectURL(f
   };
 });
 
+let gallery=false;
+$('#gal').onclick=()=>{gallery=!gallery;[0,1].forEach(n=>{const i=$('#f'+n);if(gallery)i.removeAttribute('capture');else i.setAttribute('capture','environment')});$('#gal').textContent=gallery?'Wróć do aparatu':'Wybierz z galerii zamiast aparatu'};
+
 async function analyze(){
   const key=LS.get('key','');
   if(!key){say('Brak klucza Groq. Wpisz go w ustawieniach (⚙).',true);return}
   $('#status').innerHTML='<span class="spin"></span>Odczytuję dane ze zdjęć…';
   const prompt='Na zdjęciu 1 jest strona tytułowa lub okładka książki, na zdjęciu 2 numer inwentarzowy (pieczątka, naklejka lub odręczny wpis). Zwróć TYLKO obiekt JSON: {"tytul":"...","autor":"...","inw":"..."}. Przepisz tekst dokładnie tak, jak jest wydrukowany, z polskimi znakami. Jeśli czegoś nie widać lub nie da się odczytać, wpisz null. Nie zgaduj.';
   try{
-    const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({model:'meta-llama/llama-4-scout-17b-16e-instruct',temperature:0.1,max_tokens:400,response_format:{type:'json_object'},messages:[{role:'user',content:[{type:'text',text:prompt},{type:'image_url',image_url:{url:imgs[0]}},{type:'image_url',image_url:{url:imgs[1]}}]}]})});
-    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(r.status===401?'Klucz Groq jest nieprawidłowy.':(e.error&&e.error.message)||'Błąd serwera ('+r.status+')')}
+    const tries=[{model:'qwen/qwen3.8-27b',reasoning_effort:'none'},{model:'qwen/qwen3.6-27b'}];
+    let r,lastErr='';
+    for(const t of tries){
+      r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({...t,temperature:0.1,max_tokens:2000,response_format:{type:'json_object'},messages:[{role:'user',content:[{type:'text',text:prompt},{type:'image_url',image_url:{url:imgs[0]}},{type:'image_url',image_url:{url:imgs[1]}}]}]})});
+      if(r.ok)break;
+      const e=await r.json().catch(()=>({}));lastErr=(e.error&&e.error.message)||('Błąd serwera ('+r.status+')');
+      if(r.status===401)throw new Error('Klucz Groq jest nieprawidłowy.');
+      if(r.status===429)throw new Error('Limit zapytań Groq wyczerpany. Spróbuj za chwilę.');
+    }
+    if(!r.ok)throw new Error(lastErr);
     const d=await r.json(),txt=(d.choices&&d.choices[0]&&d.choices[0].message.content)||'';
     const m=txt.match(/\{[\s\S]*\}/);let p={};try{p=JSON.parse(m?m[0]:txt)}catch{}
     show(p);
